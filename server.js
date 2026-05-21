@@ -91,6 +91,7 @@ function makePlayer(socketId, name, seat, startChips) {
     name,
     seat,
     chips: startChips,
+    buyIn: startChips,
     holeCards: [],
     bet: 0,
     totalBet: 0,
@@ -250,6 +251,7 @@ function broadcast(room) {
         isMe:       p.seat === player.seat,
         isBot:      !!p.isBot,
         lastAction: p.lastAction,
+        buyIn:      p.buyIn || 0,
         holeCards:
           p.seat === player.seat
             ? p.holeCards
@@ -274,7 +276,7 @@ function collectBets(room) {
 // ─── Start Hand ───────────────────────────────────────────────────────────────
 
 function startHand(room) {
-  room.players.forEach(p => { if (p.isBot && p.chips <= 0) p.chips = room.cfgRebuy; });
+  room.players.forEach(p => { if (p.isBot && p.chips <= 0) { p.chips = room.cfgRebuy; p.buyIn = (p.buyIn || 0) + room.cfgRebuy; } });
 
   const eligible = room.players.filter(p => p.chips > 0 && p.connected);
   if (eligible.length < 2) {
@@ -798,6 +800,7 @@ io.on('connection', (socket) => {
       return;
     }
     p.chips += room.cfgRebuy;
+    p.buyIn  = (p.buyIn || 0) + room.cfgRebuy;
     addLog(room, `${p.name} 리바이 (+${room.cfgRebuy})`);
     broadcast(room);
   });

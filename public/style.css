@@ -682,14 +682,28 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 7px 0;
+  padding: 8px 0;
   border-bottom: 1px solid #1a1a28;
   font-size: 0.85rem;
+  gap: 8px;
 }
 .stats-row:last-child { border-bottom: none; }
-.stats-name { font-weight: bold; }
+.stats-name { font-weight: bold; flex-shrink: 0; }
 .stats-val  { color: var(--muted); }
 .stats-win  { color: #2ecc71; font-weight: bold; }
+.stats-detail {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  font-size: 0.82rem;
+}
+.stats-chip-val  { color: #94a3b8; }
+.stats-pos       { color: #2ecc71; font-weight: bold; }
+.stats-neg       { color: #e74c3c; font-weight: bold; }
+.stats-buyin     { color: var(--muted); }
+.stats-win-small { color: #f59e0b; font-size: 0.78rem; }
 
 .hist-entry {
   padding: 8px 10px;

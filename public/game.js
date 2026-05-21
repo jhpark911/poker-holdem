@@ -563,18 +563,24 @@ function renderStats(s) {
   html += '<div class="stats-section">';
   html += '<div class="stats-section-title">플레이어 성적</div>';
   const players = [...s.players].sort((a, b) => {
-    const wa = (s.stats[a.seat] || {}).totalWon || 0;
-    const wb = (s.stats[b.seat] || {}).totalWon || 0;
-    return wb - wa;
+    const na = a.chips - (a.buyIn || s.cfgStartChips);
+    const nb = b.chips - (b.buyIn || s.cfgStartChips);
+    return nb - na;
   });
   players.forEach(p => {
-    const st = s.stats[p.seat] || { wins: 0, totalWon: 0 };
+    const st  = s.stats[p.seat] || { wins: 0, totalWon: 0 };
+    const buyIn = p.buyIn || s.cfgStartChips;
+    const net   = p.chips - buyIn;
+    const netStr   = (net >= 0 ? '+' : '-') + fmt(Math.abs(net));
+    const netClass = net >= 0 ? 'stats-pos' : 'stats-neg';
     html += `<div class="stats-row">
       <span class="stats-name">${esc(p.name)}${p.isBot ? ' 🤖' : ''}</span>
-      <span>
-        <span class="stats-win">${st.wins}승</span>
-        <span class="stats-val"> / +${fmt(st.totalWon)}</span>
-      </span>
+      <div class="stats-detail">
+        <span class="stats-chip-val">칩: ${fmt(p.chips)}</span>
+        <span class="${netClass}">손익: ${netStr}</span>
+        <span class="stats-buyin">바이인: ${fmt(buyIn)}</span>
+        <span class="stats-win-small">${st.wins}승</span>
+      </div>
     </div>`;
   });
   html += '</div>';
