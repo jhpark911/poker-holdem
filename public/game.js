@@ -239,12 +239,12 @@ socket.on('room-deleted', () => {
 
 // Evenly distribute N players around the oval.
 // i=0 (me) = 6 o'clock; subsequent seats spread clockwise.
-// Oval params: cx=50, cy=50, rx=42, ry=42 (% of table-wrap)
+// cx=50, cy=48, rx=42, ry=38 — slightly offset upward so bottom seat stays inside table-wrap
 function seatPosition(idx, total) {
   const a = Math.PI - idx * (2 * Math.PI / total);
   return [
     Math.round((50 + 42 * Math.sin(a)) * 10) / 10,
-    Math.round((50 - 42 * Math.cos(a)) * 10) / 10,
+    Math.round((48 - 38 * Math.cos(a)) * 10) / 10,
   ];
 }
 
@@ -333,9 +333,9 @@ function buildSeat(p, s) {
     la = `<span class="last-action ${cls}">${esc(p.lastAction)}</span>`;
   }
 
-  // Hole cards
+  // Hole cards — only show my own cards; opponents are always hidden in seat panel
   let cardsHtml = '';
-  if (p.holeCards && p.holeCards.length) {
+  if (p.isMe && p.holeCards && p.holeCards.length) {
     cardsHtml = p.holeCards.map(c => cardEl(c).outerHTML).join('');
   }
 
@@ -504,7 +504,13 @@ function renderShowdown(s) {
     });
     html += '</div>';
 
-    html += '<table class="sd-table"><tr><th>플레이어</th><th>카드</th></tr>';
+    if (s.communityCards && s.communityCards.length > 0) {
+      html += '<div class="sd-board"><div class="sd-board-label">보드</div><div class="sd-board-cards">';
+      s.communityCards.forEach(c => { html += cardEl(c).outerHTML; });
+      html += '</div></div>';
+    }
+
+    html += '<table class="sd-table"><tr><th>플레이어</th><th>홀 카드</th></tr>';
     sd.hands.forEach(h => {
       html += `<tr>
         <td>${esc(h.name)}</td>
