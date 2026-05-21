@@ -132,7 +132,7 @@ async function run() {
   const newActionSeat  = stateAfterCall.actionSeat;
   const secondActor    = newActionSeat === alicesSeat ? p1 : p2;
   secondActor.socket.emit('action', { action: 'check' });
-  await delay(500);
+  await delay(1100);
 
   const flopState = p1.states.at(-1);
   assert(flopState.street === 'flop', `Advanced to flop — got ${flopState.street}`);
@@ -146,7 +146,7 @@ async function run() {
   flopAction1.socket.emit('action', { action: 'check' });
   await delay(400);
   flopAction2.socket.emit('action', { action: 'check' });
-  await delay(500);
+  await delay(1100);
 
   const turnState = p1.states.at(-1);
   assert(turnState.street === 'turn', `Advanced to turn — got ${turnState.street}`);
@@ -159,7 +159,7 @@ async function run() {
   turnA1.socket.emit('action', { action: 'check' });
   await delay(400);
   turnA2.socket.emit('action', { action: 'check' });
-  await delay(500);
+  await delay(1100);
 
   const riverState = p1.states.at(-1);
   assert(riverState.street === 'river', `Advanced to river — got ${riverState.street}`);
@@ -172,7 +172,7 @@ async function run() {
   riverA1.socket.emit('action', { action: 'check' });
   await delay(400);
   riverA2.socket.emit('action', { action: 'check' });
-  await delay(800);
+  await delay(1100);
 
   const sdState = p1.states.at(-1);
   assert(sdState.street === 'showdown', `Showdown reached — got ${sdState.street}`);
@@ -194,9 +194,9 @@ async function run() {
   assert(opponent.holeCards.length === 2 && opponent.holeCards[0] !== '??',
     'Opponent hole cards visible at showdown');
 
-  // ── Test 9: Auto-next-hand after 5s ───────────────────────────────────────
-  console.log('\nTest 9: Auto next hand starts after 5s delay');
-  await delay(6000);
+  // ── Test 9: Auto-next-hand after 20s showdown delay ──────────────────────
+  console.log('\nTest 9: Auto next hand starts after 20s showdown delay');
+  await delay(21000);
   const nextHand = p1.states.at(-1);
   assert(nextHand.handNumber === 2, `Hand #2 started — got ${nextHand.handNumber}`);
   assert(nextHand.street === 'preflop', 'Back to preflop');
@@ -207,7 +207,7 @@ async function run() {
   const h2ActionSeat = h2State.actionSeat;
   const folder = h2ActionSeat === alicesSeat ? p1 : p2;
   folder.socket.emit('action', { action: 'fold' });
-  await delay(600);
+  await delay(1000);
 
   const foldResult = p1.states.at(-1);
   assert(foldResult.street === 'showdown', 'Showdown after fold');

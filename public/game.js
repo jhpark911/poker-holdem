@@ -699,6 +699,85 @@ function closeStats() {
   el('stats-overlay').style.display = 'none';
 }
 
+// ─── Master Admin Panel ───────────────────────────────────────────────────────
+
+let adminAuthed = false;
+
+function adminPw() { return el('admin-pw') ? el('admin-pw').value : ''; }
+
+function openAdminModal() {
+  el('admin-modal').style.display = 'flex';
+  if (!adminAuthed) el('admin-pw').focus();
+}
+
+function closeAdminModal() {
+  el('admin-modal').style.display = 'none';
+  el('admin-pw').value = '';
+  el('admin-err').textContent = '';
+  el('admin-rooms-panel').style.display = 'none';
+  el('admin-login-panel').style.display = 'block';
+  adminAuthed = false;
+}
+
+el('btn-admin-open').addEventListener('click', openAdminModal);
+el('btn-admin-close').addEventListener('click', closeAdminModal);
+
+el('admin-modal').addEventListener('click', (e) => {
+  if (e.target === el('admin-modal')) closeAdminModal();
+});
+
+el('btn-admin-login').addEventListener('click', () => {
+  socket.emit('admin-list-rooms', { password: adminPw() });
+});
+
+el('admin-pw').addEventListener('keydown', e => {
+  if (e.key === 'Enter') el('btn-admin-login').click();
+});
+
+el('btn-admin-refresh').addEventListener('click', () => {
+  if (adminAuthed) socket.emit('admin-list-rooms', { password: adminPw() });
+});
+
+socket.on('admin-room-list', (list) => {
+  adminAuthed = true;
+  el('admin-err').textContent = '';
+  el('admin-login-panel').style.display = 'none';
+  el('admin-rooms-panel').style.display = 'block';
+  el('admin-room-count').textContent = `방 목록 (${list.length}개)`;
+
+  const container = el('admin-room-list');
+  if (list.length === 0) {
+    container.innerHTML = '<div class="admin-empty">현재 활성 방이 없습니다.</div>';
+    return;
+  }
+
+  container.innerHTML = list.map(r => `
+    <div class="admin-room-row">
+      <div class="admin-room-info">
+        <span class="admin-room-code">${esc(r.code)}</span>
+        <span class="admin-room-detail">
+          👤 ${r.playerCount}명${r.botCount > 0 ? ` + 🤖${r.botCount}봇` : ''} &nbsp;|&nbsp;
+          ${streetKo(r.street)}${r.started ? ' · Hand #' + r.handNumber : ' · 미시작'}
+        </span>
+      </div>
+      <button class="btn-admin-del" data-code="${esc(r.code)}">삭제</button>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.btn-admin-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const code = btn.dataset.code;
+      if (confirm(`방 [${code}] 을 삭제하시겠습니까?\n참가자 전원이 로비로 이동됩니다.`)) {
+        socket.emit('admin-delete-room', { password: adminPw(), roomCode: code });
+      }
+    });
+  });
+});
+
+socket.on('admin-err', (msg) => {
+  el('admin-err').textContent = msg;
+});
+
 // ─── Card Rendering ───────────────────────────────────────────────────────────
 
 const SUIT_SYMBOL = { s: '♠', h: '♥', d: '♦', c: '♣' };

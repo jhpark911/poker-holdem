@@ -21,6 +21,32 @@
     <button id="btn-join">입장 / 방 만들기</button>
     <div id="lobby-err" class="err-msg"></div>
   </div>
+  <button id="btn-admin-open" class="btn-admin-open">🔑 관리자</button>
+</div>
+
+<!-- ─── ADMIN MODAL ─── -->
+<div id="admin-modal" style="display:none">
+  <div id="admin-box">
+    <button id="btn-admin-close" class="admin-close-btn">✕</button>
+    <div class="admin-title">🔑 마스터 관리자</div>
+
+    <div id="admin-login-panel">
+      <p class="admin-hint">마스터 비밀번호를 입력하세요</p>
+      <div class="admin-input-row">
+        <input id="admin-pw" type="password" placeholder="비밀번호" autocomplete="off">
+        <button id="btn-admin-login" class="btn-gold-sm">확인</button>
+      </div>
+      <div id="admin-err" class="err-msg"></div>
+    </div>
+
+    <div id="admin-rooms-panel" style="display:none">
+      <div class="admin-rooms-header">
+        <span id="admin-room-count">방 목록</span>
+        <button id="btn-admin-refresh" class="btn-gold-sm">새로고침</button>
+      </div>
+      <div id="admin-room-list"></div>
+    </div>
+  </div>
 </div>
 
 <!-- ─── GAME ─── -->

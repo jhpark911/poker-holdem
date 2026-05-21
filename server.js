@@ -13,6 +13,7 @@ app.use(express.static('public'));
 
 const PORT            = process.env.PORT || 3000;
 const MAX_SEATS       = 9;
+const MASTER_PASSWORD = 'chechebane';
 const NEXT_HAND_DELAY_FOLD     = 5000;
 const NEXT_HAND_DELAY_SHOWDOWN = 20000;
 
@@ -203,6 +204,20 @@ function updateStats(room, winnerInfo) {
     room.stats[w.seat].wins++;
     room.stats[w.seat].totalWon += w.amount;
   }
+}
+
+// ─── Admin Helper ─────────────────────────────────────────────────────────────
+
+function buildAdminList() {
+  return Object.values(rooms).map(r => ({
+    code:         r.code,
+    street:       r.street,
+    handNumber:   r.handNumber,
+    started:      r.started,
+    playerCount:  r.players.filter(p => p.connected && !p.isBot).length,
+    botCount:     r.players.filter(p => p.isBot).length,
+    totalSeats:   r.players.length,
+  }));
 }
 
 // ─── Broadcast ────────────────────────────────────────────────────────────────
@@ -853,6 +868,32 @@ io.on('connection', (socket) => {
       delete socketMap[p.socketId];
     }
     delete rooms[info.code];
+  });
+
+  // ─── Master Admin ─────────────────────────────────────────────────────────
+
+  socket.on('admin-list-rooms', ({ password } = {}) => {
+    if (password !== MASTER_PASSWORD) {
+      socket.emit('admin-err', '비밀번호가 틀렸습니다.');
+      return;
+    }
+    socket.emit('admin-room-list', buildAdminList());
+  });
+
+  socket.on('admin-delete-room', ({ password, roomCode } = {}) => {
+    if (password !== MASTER_PASSWORD) {
+      socket.emit('admin-err', '비밀번호가 틀렸습니다.');
+      return;
+    }
+    const room = rooms[roomCode];
+    if (!room) {
+      socket.emit('admin-err', `방 [${roomCode}] 을 찾을 수 없습니다.`);
+      return;
+    }
+    io.to(roomCode).emit('room-deleted');
+    for (const p of room.players) delete socketMap[p.socketId];
+    delete rooms[roomCode];
+    socket.emit('admin-room-list', buildAdminList());
   });
 
   socket.on('disconnect', () => {
