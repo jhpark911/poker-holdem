@@ -459,12 +459,16 @@ function handleAction(room, seat, action, amount) {
 
   if (isActionClosed(room)) {
     collectBets(room);
-    advanceStreet(room);
+    room.actionSeat = -1;
+    broadcast(room);
+    setTimeout(() => { if (rooms[room.code]) advanceStreet(room); }, 700);
   } else {
     const next = nextBettorSeat(room, seat);
     if (next === -1) {
       collectBets(room);
-      advanceStreet(room);
+      room.actionSeat = -1;
+      broadcast(room);
+      setTimeout(() => { if (rooms[room.code]) advanceStreet(room); }, 700);
     } else {
       room.actionSeat = next;
       scheduleActionTimer(room);
