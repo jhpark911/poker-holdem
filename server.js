@@ -674,7 +674,7 @@ function botDecide(room, seat) {
   const minRaise = room.currentBet + room.lastRaiseSize;
   const maxBet   = p.chips + p.bet;
   const canRaise = maxBet >= minRaise;
-  const bluff    = strength < 42 && Math.random() < 0.12;
+  const bluff    = strength < 42 && Math.random() < 0.33;
 
   let action, amount;
 
