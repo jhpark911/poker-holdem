@@ -14,7 +14,7 @@ app.use(express.static('public'));
 const PORT            = process.env.PORT || 3000;
 const MAX_SEATS       = 9;
 const NEXT_HAND_DELAY_FOLD     = 5000;
-const NEXT_HAND_DELAY_SHOWDOWN = 10000;
+const NEXT_HAND_DELAY_SHOWDOWN = 20000;
 
 const DEFAULT_SB          = 100;
 const DEFAULT_BB          = 200;

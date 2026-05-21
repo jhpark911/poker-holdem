@@ -524,7 +524,7 @@ function renderShowdown(s) {
   if (isRealShowdown) {
     html += `<div id="sd-countdown-wrap">
       <div id="sd-bar-bg"><div id="sd-bar"></div></div>
-      <span id="sd-sec">10s</span>
+      <span id="sd-sec">20s</span>
     </div>`;
   }
 
@@ -536,16 +536,16 @@ function renderShowdown(s) {
       showdownRevealTime = Date.now();
       clearShowdownTimer();
       showdownTimer = setInterval(() => {
-        const rem = Math.max(0, 10 - (Date.now() - showdownRevealTime) / 1000);
+        const rem = Math.max(0, 20 - (Date.now() - showdownRevealTime) / 1000);
         const bar = el('sd-bar'), sec = el('sd-sec');
-        if (bar) bar.style.width = (rem / 10 * 100) + '%';
+        if (bar) bar.style.width = (rem / 20 * 100) + '%';
         if (sec) sec.textContent = Math.ceil(rem) + 's';
         if (rem <= 0) { clearShowdownTimer(); overlay.style.display = 'none'; }
       }, 100);
     } else if (showdownRevealTime) {
-      const rem = Math.max(0, 10 - (Date.now() - showdownRevealTime) / 1000);
+      const rem = Math.max(0, 20 - (Date.now() - showdownRevealTime) / 1000);
       const bar = el('sd-bar'), sec = el('sd-sec');
-      if (bar) bar.style.width = (rem / 10 * 100) + '%';
+      if (bar) bar.style.width = (rem / 20 * 100) + '%';
       if (sec) sec.textContent = Math.ceil(rem) + 's';
     }
   }
