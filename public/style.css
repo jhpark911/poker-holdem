@@ -275,12 +275,12 @@ body {
   border-radius: 8px;
   padding: 10px 14px;
   font-size: 0.82rem;
-  color: #888;
+  color: #e8e8e8;
   max-height: 180px;
   overflow-y: auto;
 }
-#log-title   { color: #555; margin-bottom: 6px; font-size: 0.75rem; text-transform: uppercase; }
-.log-entry   { padding: 2px 0; border-bottom: 1px solid #1a2e1a; }
+#log-title   { color: #aaa; margin-bottom: 6px; font-size: 0.75rem; text-transform: uppercase; }
+.log-entry   { padding: 2px 0; border-bottom: 1px solid #1e3e2a; }
 
 /* ─── Toast Notifications ─── */
 #toast-container {
