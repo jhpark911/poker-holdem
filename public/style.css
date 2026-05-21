@@ -491,6 +491,22 @@ body {
 .btn-green  { background: #1a7a3a; }
 .btn-orange { background: #b84800; }
 
+#btn-raise {
+  background: #e91e8c;
+  color: #000;
+  font-size: 1rem;
+  padding: 11px 22px;
+  font-weight: bold;
+}
+#btn-raise:hover { filter: brightness(1.1) !important; }
+
+#raise-min-label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-align: right;
+  padding-right: 2px;
+}
+
 /* Raise section */
 #raise-row {
   display: flex;

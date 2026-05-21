@@ -426,6 +426,9 @@ function renderControls(s) {
   const raiseRow = document.getElementById('raise-row');
   raiseRow.style.display = maxBet > s.currentBet ? 'flex' : 'none';
 
+  const minLabel = document.getElementById('raise-min-label');
+  if (minLabel) minLabel.textContent = maxBet > s.currentBet ? `최소 레이즈: ${fmt(minTotal)}칩` : '';
+
   // Preset bet buttons
   const livePot = s.pot;
   document.querySelectorAll('.preset-btn').forEach(btn => {
