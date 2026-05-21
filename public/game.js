@@ -237,17 +237,16 @@ socket.on('room-deleted', () => {
 // [left%, top%] — center of seat, relative to #table-wrap
 // Seat 0 = me (bottom center), then clockwise
 
-const OVAL_POSITIONS = [
-  [50,  91],   // 0 bottom center
-  [76,  82],   // 1 bottom right
-  [92,  57],   // 2 right
-  [82,  20],   // 3 top right
-  [63,   6],   // 4 top right-center
-  [37,   6],   // 5 top left-center
-  [18,  20],   // 6 top left
-  [ 8,  57],   // 7 left
-  [24,  82],   // 8 bottom left
-];
+// Evenly distribute N players around the oval.
+// i=0 (me) = 6 o'clock; subsequent seats spread clockwise.
+// Oval params: cx=50, cy=50, rx=42, ry=42 (% of table-wrap)
+function seatPosition(idx, total) {
+  const a = Math.PI - idx * (2 * Math.PI / total);
+  return [
+    Math.round((50 + 42 * Math.sin(a)) * 10) / 10,
+    Math.round((50 - 42 * Math.cos(a)) * 10) / 10,
+  ];
+}
 
 function ovalOrderedPlayers(players) {
   const me = players.find(p => p.isMe);
@@ -288,7 +287,7 @@ function renderTable(s) {
   // Seats
   const ordered = ovalOrderedPlayers(s.players);
   ordered.forEach((p, i) => {
-    const [lp, tp] = OVAL_POSITIONS[i] || [50, 50];
+    const [lp, tp] = seatPosition(i, ordered.length);
     const div = buildSeat(p, s);
     div.style.left = lp + '%';
     div.style.top  = tp + '%';
