@@ -241,6 +241,10 @@ body {
 #btn-start:hover { background: #9b59b6; }
 #btn-rebuy { background: #16a085; color: #fff; }
 #btn-rebuy:hover { background: #1abc9c; }
+#btn-add-bot { background: #5d3fd3; color: #fff; }
+#btn-add-bot:hover { background: #7b5ce7; }
+#btn-remove-bot { background: #555; color: #ccc; }
+#btn-remove-bot:hover { background: #666; }
 
 /* ─── Showdown Overlay ─── */
 #showdown-overlay {

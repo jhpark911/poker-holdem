@@ -190,15 +190,25 @@ function renderControls(s) {
 // ─── Meta buttons ─────────────────────────────────────────────────────────────
 
 function renderMeta(s) {
-  const me = s.players.find(p => p.isMe);
+  const me   = s.players.find(p => p.isMe);
+  const bots = s.players.filter(p => p.isBot);
 
   const btnStart = document.getElementById('btn-start');
-  btnStart.style.display = (s.street === 'waiting' && !s.started) || s.street === 'waiting'
-    ? 'inline-block' : 'none';
+  btnStart.style.display = s.street === 'waiting' ? 'inline-block' : 'none';
 
   const btnRebuy = document.getElementById('btn-rebuy');
   btnRebuy.style.display =
     (me && (me.chips === 0 || s.street === 'waiting' || s.street === 'showdown'))
+      ? 'inline-block' : 'none';
+
+  const btnAddBot = document.getElementById('btn-add-bot');
+  btnAddBot.style.display =
+    (s.street === 'waiting' || s.street === 'showdown') && s.players.length < 9
+      ? 'inline-block' : 'none';
+
+  const btnRemoveBot = document.getElementById('btn-remove-bot');
+  btnRemoveBot.style.display =
+    bots.length > 0 && (s.street === 'waiting' || s.street === 'showdown')
       ? 'inline-block' : 'none';
 }
 
@@ -268,6 +278,12 @@ document.getElementById('btn-start').addEventListener('click', () =>
 
 document.getElementById('btn-rebuy').addEventListener('click', () =>
   socket.emit('rebuy'));
+
+document.getElementById('btn-add-bot').addEventListener('click', () =>
+  socket.emit('add-bot'));
+
+document.getElementById('btn-remove-bot').addEventListener('click', () =>
+  socket.emit('remove-bot'));
 
 // ─── Card Rendering ───────────────────────────────────────────────────────────
 
