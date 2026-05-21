@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Texas Hold'em</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ─── LOBBY ─── -->
+<div id="lobby">
+  <h1>Texas Hold'em</h1>
+  <div class="lobby-box">
+    <input id="inp-name" type="text" placeholder="이름 입력" maxlength="12" autocomplete="off">
+    <input id="inp-room" type="text" placeholder="방 코드 (없으면 자동 생성)" maxlength="8" autocomplete="off" style="text-transform:uppercase">
+    <button id="btn-join">입장 / 방 만들기</button>
+    <div id="lobby-err" class="err-msg"></div>
+  </div>
+</div>
+
+<!-- ─── GAME ─── -->
+<div id="game" style="display:none">
+
+  <div id="topbar">
+    <span id="room-label">방: <strong id="room-code-disp"></strong></span>
+    <span id="hand-label">Hand #<span id="hand-num">0</span></span>
+    <span id="street-label">대기중</span>
+  </div>
+
+  <!-- Community cards + Pot -->
+  <div id="board">
+    <div id="community-area">
+      <div id="community-cards"></div>
+      <div id="pot-display">팟: 0</div>
+    </div>
+  </div>
+
+  <!-- Seats -->
+  <div id="seats-area"></div>
+
+  <!-- Action Controls -->
+  <div id="controls" style="display:none">
+    <div id="action-label"></div>
+    <div id="action-btns">
+      <button id="btn-fold"  class="btn-red">폴드</button>
+      <button id="btn-check-call" class="btn-blue">체크</button>
+      <div id="raise-row">
+        <input id="raise-inp" type="number" step="100">
+        <button id="btn-raise" class="btn-green">레이즈</button>
+      </div>
+      <button id="btn-allin" class="btn-orange">올인</button>
+    </div>
+  </div>
+
+  <!-- Meta buttons -->
+  <div id="meta-btns">
+    <button id="btn-start"  style="display:none">게임 시작</button>
+    <button id="btn-rebuy"  style="display:none">리바이 (+20,000)</button>
+  </div>
+
+  <!-- Showdown overlay -->
+  <div id="showdown-overlay" style="display:none">
+    <div id="showdown-box"></div>
+  </div>
+
+  <!-- Log -->
+  <div id="log-area">
+    <div id="log-title">게임 로그</div>
+    <div id="log-list"></div>
+  </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
