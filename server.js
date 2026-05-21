@@ -11,28 +11,29 @@ const io     = new Server(server);
 
 app.use(express.static('public'));
 
-const PORT           = process.env.PORT || 3000;
-const STARTING_CHIPS = 20000;
-const SB_AMOUNT      = 100;
-const BB_AMOUNT      = 200;
-const REBUY_AMOUNT   = 20000;
-const MAX_SEATS      = 9;
-const NEXT_HAND_DELAY = 5000;
+const PORT            = process.env.PORT || 3000;
+const MAX_SEATS       = 9;
+const NEXT_HAND_DELAY_FOLD     = 5000;
+const NEXT_HAND_DELAY_SHOWDOWN = 10000;
 
-const rooms     = {};  // code -> room
-const socketMap = {};  // socketId -> { code, seat }
+const DEFAULT_SB          = 100;
+const DEFAULT_BB          = 200;
+const DEFAULT_START_CHIPS = 20000;
+const DEFAULT_REBUY       = 20000;
+const DEFAULT_TIMER       = 30;
 
-// ─── Bot constants ────────────────────────────────────────────────────────────
+const rooms     = {};
+const socketMap = {};
 
-const BOT_NAMES    = ['Claude', 'Aria', 'Nova', 'Rex', 'Sage'];
-const RANK_VAL     = {'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'T':10,'J':11,'Q':12,'K':13,'A':14};
-const HAND_SCORE   = {
-  'High Card':10, 'Pair':28, 'Two Pair':48, 'Three of a Kind':62,
-  'Straight':72, 'Flush':78, 'Full House':86, 'Four of a Kind':93,
-  'Straight Flush':97, 'Royal Flush':100,
+const BOT_NAMES  = ['Claude', 'Aria', 'Nova', 'Rex', 'Sage'];
+const RANK_VAL   = {'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'T':10,'J':11,'Q':12,'K':13,'A':14};
+const HAND_SCORE = {
+  'High Card':10,'Pair':28,'Two Pair':48,'Three of a Kind':62,
+  'Straight':72,'Flush':78,'Full House':86,'Four of a Kind':93,
+  'Straight Flush':97,'Royal Flush':100,
 };
 
-// ─── Deck ────────────────────────────────────────────────────────────────────
+// ─── Deck ─────────────────────────────────────────────────────────────────────
 
 function newDeck() {
   const suits = ['s','h','d','c'];
@@ -61,7 +62,7 @@ function makeRoom(code) {
     communityCards: [],
     pot: 0,
     currentBet: 0,
-    lastRaiseSize: BB_AMOUNT,
+    lastRaiseSize: DEFAULT_BB,
     dealerSeat: -1,
     sbSeat: -1,
     bbSeat: -1,
@@ -71,15 +72,25 @@ function makeRoom(code) {
     log: [],
     started: false,
     showdownData: null,
+    hostSeat: -1,
+    cfgSB: DEFAULT_SB,
+    cfgBB: DEFAULT_BB,
+    cfgStartChips: DEFAULT_START_CHIPS,
+    cfgRebuy: DEFAULT_REBUY,
+    cfgTimer: DEFAULT_TIMER,
+    actionTimer: null,
+    actionStartTime: null,
+    stats: {},
+    handHistory: [],
   };
 }
 
-function makePlayer(socketId, name, seat) {
+function makePlayer(socketId, name, seat, startChips) {
   return {
     socketId,
     name,
     seat,
-    chips: STARTING_CHIPS,
+    chips: startChips,
     holeCards: [],
     bet: 0,
     totalBet: 0,
@@ -98,11 +109,10 @@ function addLog(room, msg) {
   if (room.log.length > 40) room.log.length = 40;
 }
 
-const getP       = (room, seat) => room.players.find(p => p.seat === seat);
-const getBySocket = (room, sid) => room.players.find(p => p.socketId === sid);
+const getP        = (room, seat) => room.players.find(p => p.seat === seat);
 const getByName   = (room, name) => room.players.find(p => p.name === name);
-const notFolded   = (room) => room.players.filter(p => !p.folded);
-const canBet      = (room) => room.players.filter(p => !p.folded && !p.allIn);
+const notFolded   = (room)       => room.players.filter(p => !p.folded);
+const canBet      = (room)       => room.players.filter(p => !p.folded && !p.allIn);
 
 function nextActiveSeat(room, fromSeat) {
   for (let i = 1; i <= MAX_SEATS; i++) {
@@ -137,7 +147,6 @@ function calcSidePots(players) {
 
   const pots = [];
   let prev = 0;
-
   for (const d of data) {
     if (d.totalBet <= prev) continue;
     const diff     = d.totalBet - prev;
@@ -148,6 +157,51 @@ function calcSidePots(players) {
     prev = d.totalBet;
   }
   return pots;
+}
+
+// ─── Timer ────────────────────────────────────────────────────────────────────
+
+function clearActionTimer(room) {
+  if (room.actionTimer) {
+    clearTimeout(room.actionTimer);
+    room.actionTimer = null;
+  }
+  room.actionStartTime = null;
+}
+
+function scheduleActionTimer(room) {
+  clearActionTimer(room);
+  if (!room.cfgTimer || room.cfgTimer <= 0) return;
+  const seat = room.actionSeat;
+  const p    = getP(room, seat);
+  if (!p || p.isBot) return;
+  room.actionStartTime = Date.now();
+  room.actionTimer = setTimeout(() => {
+    if (!rooms[room.code] || room.actionSeat !== seat) return;
+    if (!['preflop','flop','turn','river'].includes(room.street)) return;
+    handleAction(room, seat, 'fold');
+  }, room.cfgTimer * 1000);
+}
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+
+function ensureStats(room, seat) {
+  if (!room.stats[seat]) room.stats[seat] = { wins: 0, totalWon: 0 };
+}
+
+function updateStats(room, winnerInfo) {
+  const handRecord = {
+    handNumber: room.handNumber,
+    winners: winnerInfo.map(w => ({ name: w.name, amount: w.amount, handName: w.handName || '' })),
+  };
+  room.handHistory.unshift(handRecord);
+  if (room.handHistory.length > 5) room.handHistory.length = 5;
+
+  for (const w of winnerInfo) {
+    ensureStats(room, w.seat);
+    room.stats[w.seat].wins++;
+    room.stats[w.seat].totalWon += w.amount;
+  }
 }
 
 // ─── Broadcast ────────────────────────────────────────────────────────────────
@@ -162,30 +216,39 @@ function broadcast(room) {
     const isShowdown = !!room.showdownData;
 
     sock.emit('state', {
-      roomCode: room.code,
-      street: room.street,
-      pot: livePot,
-      communityCards: room.communityCards,
-      currentBet: room.currentBet,
-      minRaise: room.currentBet + room.lastRaiseSize,
-      actionSeat: room.actionSeat,
-      dealerSeat: room.dealerSeat,
-      sbSeat: room.sbSeat,
-      bbSeat: room.bbSeat,
-      handNumber: room.handNumber,
-      log: room.log.slice(0, 20),
-      showdownData: room.showdownData,
-      started: room.started,
+      roomCode:        room.code,
+      street:          room.street,
+      pot:             livePot,
+      communityCards:  room.communityCards,
+      currentBet:      room.currentBet,
+      minRaise:        room.currentBet + room.lastRaiseSize,
+      actionSeat:      room.actionSeat,
+      dealerSeat:      room.dealerSeat,
+      sbSeat:          room.sbSeat,
+      bbSeat:          room.bbSeat,
+      handNumber:      room.handNumber,
+      log:             room.log.slice(0, 20),
+      showdownData:    room.showdownData,
+      started:         room.started,
+      hostSeat:        room.hostSeat,
+      cfgSB:           room.cfgSB,
+      cfgBB:           room.cfgBB,
+      cfgStartChips:   room.cfgStartChips,
+      cfgRebuy:        room.cfgRebuy,
+      cfgTimer:        room.cfgTimer,
+      actionStartTime: room.actionStartTime,
+      stats:           room.stats,
+      handHistory:     room.handHistory,
       players: room.players.map(p => ({
-        seat: p.seat,
-        name: p.name,
-        chips: p.chips,
-        bet: p.bet,
-        folded: p.folded,
-        allIn: p.allIn,
-        connected: p.connected,
-        isMe: p.seat === player.seat,
-        isBot: !!p.isBot,
+        seat:       p.seat,
+        name:       p.name,
+        chips:      p.chips,
+        bet:        p.bet,
+        folded:     p.folded,
+        allIn:      p.allIn,
+        connected:  p.connected,
+        isMe:       p.seat === player.seat,
+        isBot:      !!p.isBot,
         lastAction: p.lastAction,
         holeCards:
           p.seat === player.seat
@@ -199,7 +262,7 @@ function broadcast(room) {
   scheduleBotAct(room);
 }
 
-// ─── Collect bets into pot ────────────────────────────────────────────────────
+// ─── Collect bets ─────────────────────────────────────────────────────────────
 
 function collectBets(room) {
   room.players.forEach(p => {
@@ -211,8 +274,7 @@ function collectBets(room) {
 // ─── Start Hand ───────────────────────────────────────────────────────────────
 
 function startHand(room) {
-  // Auto-rebuy bots that ran out of chips
-  room.players.forEach(p => { if (p.isBot && p.chips <= 0) p.chips = REBUY_AMOUNT; });
+  room.players.forEach(p => { if (p.isBot && p.chips <= 0) p.chips = room.cfgRebuy; });
 
   const eligible = room.players.filter(p => p.chips > 0 && p.connected);
   if (eligible.length < 2) {
@@ -222,24 +284,23 @@ function startHand(room) {
   }
 
   room.players.forEach(p => {
-    p.holeCards        = [];
-    p.bet              = 0;
-    p.totalBet         = 0;
-    p.folded           = p.chips <= 0 || !p.connected;
-    p.allIn            = false;
-    p.actedThisStreet  = false;
-    p.lastAction       = '';
+    p.holeCards       = [];
+    p.bet             = 0;
+    p.totalBet        = 0;
+    p.folded          = p.chips <= 0 || !p.connected;
+    p.allIn           = false;
+    p.actedThisStreet = false;
+    p.lastAction      = '';
   });
 
-  room.communityCards  = [];
-  room.pot             = 0;
-  room.currentBet      = 0;
-  room.lastRaiseSize   = BB_AMOUNT;
-  room.showdownData    = null;
+  room.communityCards = [];
+  room.pot            = 0;
+  room.currentBet     = 0;
+  room.lastRaiseSize  = room.cfgBB;
+  room.showdownData   = null;
   room.handNumber++;
-  room.street          = 'preflop';
+  room.street         = 'preflop';
 
-  // Rotate dealer
   if (room.dealerSeat === -1) {
     room.dealerSeat = eligible[0].seat;
   } else {
@@ -254,37 +315,36 @@ function startHand(room) {
     room.bbSeat = nextActiveSeat(room, room.sbSeat);
   }
 
-  postBlind(room, room.sbSeat, SB_AMOUNT);
-  postBlind(room, room.bbSeat, BB_AMOUNT);
-  room.currentBet    = BB_AMOUNT;
-  room.lastRaiseSize = BB_AMOUNT;
+  postBlind(room, room.sbSeat, room.cfgSB);
+  postBlind(room, room.bbSeat, room.cfgBB);
+  room.currentBet    = room.cfgBB;
+  room.lastRaiseSize = room.cfgBB;
 
-  // Deal cards to non-folded players
   room.deck = newDeck();
   room.players.filter(p => !p.folded).forEach(p => {
     p.holeCards = [room.deck.pop(), room.deck.pop()];
   });
 
-  // Preflop action: UTG (after BB) for 3+, dealer/SB for HU
   room.actionSeat = eligible.length === 2
     ? room.sbSeat
     : nextActiveSeat(room, room.bbSeat);
 
   addLog(room, `── Hand #${room.handNumber} ──`);
   addLog(room, `딜러: ${getP(room, room.dealerSeat).name}`);
-  addLog(room, `${getP(room, room.sbSeat).name} SB ${SB_AMOUNT}`);
-  addLog(room, `${getP(room, room.bbSeat).name} BB ${BB_AMOUNT}`);
+  addLog(room, `${getP(room, room.sbSeat).name} SB ${room.cfgSB}`);
+  addLog(room, `${getP(room, room.bbSeat).name} BB ${room.cfgBB}`);
 
+  scheduleActionTimer(room);
   broadcast(room);
 }
 
 function postBlind(room, seat, amount) {
   const p = getP(room, seat);
   if (!p) return;
-  const actual    = Math.min(amount, p.chips);
-  p.chips        -= actual;
-  p.bet          += actual;
-  p.totalBet     += actual;
+  const actual  = Math.min(amount, p.chips);
+  p.chips      -= actual;
+  p.bet        += actual;
+  p.totalBet   += actual;
   if (p.chips === 0) p.allIn = true;
 }
 
@@ -294,6 +354,8 @@ function handleAction(room, seat, action, amount) {
   const p = getP(room, seat);
   if (!p || p.folded || p.allIn || room.actionSeat !== seat) return;
   if (!['fold','check','call','raise','allin'].includes(action)) return;
+
+  clearActionTimer(room);
 
   const toCall = room.currentBet - p.bet;
 
@@ -330,7 +392,6 @@ function handleAction(room, seat, action, amount) {
       if (isNaN(raiseAmt)) return;
       const minTotal = room.currentBet + room.lastRaiseSize;
       const maxTotal = p.chips + p.bet;
-      // Must meet min raise, OR be going all-in
       if (raiseAmt < minTotal && raiseAmt !== maxTotal) return;
       const finalAmt = Math.min(raiseAmt, maxTotal);
       const raiseBy  = finalAmt - room.currentBet;
@@ -346,7 +407,6 @@ function handleAction(room, seat, action, amount) {
       p.actedThisStreet = true;
       p.lastAction = `레이즈 → ${finalAmt}`;
 
-      // Reopen action for others
       room.players.forEach(q => {
         if (q.seat !== seat && !q.folded && !q.allIn) q.actedThisStreet = false;
       });
@@ -379,12 +439,12 @@ function handleAction(room, seat, action, amount) {
     }
   }
 
-  // Single survivor?
   const alive = notFolded(room);
   if (alive.length === 1) {
     collectBets(room);
     const winner = alive[0];
     winner.chips += room.pot;
+    updateStats(room, [{ seat: winner.seat, name: winner.name, amount: room.pot, handName: '' }]);
     addLog(room, `${winner.name} 승리 (무경쟁) +${room.pot}`);
     room.showdownData = {
       winners: [{ seat: winner.seat, name: winner.name, amount: room.pot, handName: '' }],
@@ -393,7 +453,7 @@ function handleAction(room, seat, action, amount) {
     room.pot    = 0;
     room.street = 'showdown';
     broadcast(room);
-    scheduleNextHand(room);
+    scheduleNextHand(room, NEXT_HAND_DELAY_FOLD);
     return;
   }
 
@@ -407,6 +467,7 @@ function handleAction(room, seat, action, amount) {
       advanceStreet(room);
     } else {
       room.actionSeat = next;
+      scheduleActionTimer(room);
       broadcast(room);
     }
   }
@@ -421,12 +482,11 @@ function advanceStreet(room) {
     p.lastAction      = '';
   });
   room.currentBet    = 0;
-  room.lastRaiseSize = BB_AMOUNT;
+  room.lastRaiseSize = room.cfgBB;
 
   const streets = ['preflop','flop','turn','river'];
-  const idx     = streets.indexOf(room.street);
 
-  if (room.street === 'river' || idx === -1) {
+  if (room.street === 'river' || !streets.includes(room.street)) {
     doShowdown(room);
     return;
   }
@@ -449,7 +509,6 @@ function advanceStreet(room) {
       break;
   }
 
-  // If ≤1 player can still bet, run out cards and showdown
   if (canBet(room).length <= 1) {
     while (room.communityCards.length < 5) room.communityCards.push(room.deck.pop());
     broadcast(room);
@@ -457,9 +516,9 @@ function advanceStreet(room) {
     return;
   }
 
-  // Postflop: first active player left of dealer
   const firstBettor = nextBettorSeat(room, room.dealerSeat);
   room.actionSeat   = firstBettor;
+  scheduleActionTimer(room);
   broadcast(room);
 }
 
@@ -470,44 +529,37 @@ function doShowdown(room) {
   const alive = notFolded(room);
 
   if (alive.length === 1) {
-    // Shouldn't normally reach here, but handle gracefully
     const winner = alive[0];
     winner.chips += room.pot;
+    updateStats(room, [{ seat: winner.seat, name: winner.name, amount: room.pot, handName: '' }]);
     room.showdownData = {
       winners: [{ seat: winner.seat, name: winner.name, amount: room.pot, handName: '' }],
       hands: [],
     };
     room.pot = 0;
     broadcast(room);
-    scheduleNextHand(room);
+    scheduleNextHand(room, NEXT_HAND_DELAY_FOLD);
     return;
   }
 
-  // Evaluate hands
   const evals = alive.map(p => {
     const hand = Hand.solve([...p.holeCards, ...room.communityCards]);
     hand._seat = p.seat;
     return { seat: p.seat, name: p.name, hand, holeCards: p.holeCards };
   });
 
-  const pots    = calcSidePots(room.players);
+  const pots     = calcSidePots(room.players);
   const winnings = {};
   room.players.forEach(p => { winnings[p.seat] = 0; });
 
   for (const pot of pots) {
     const eligibleEvals = evals.filter(e => pot.eligible.includes(e.seat));
     if (!eligibleEvals.length) continue;
-
-    const winnerHands  = Hand.winners(eligibleEvals.map(e => e.hand));
-    const winnerSeats  = eligibleEvals
-      .filter(e => winnerHands.includes(e.hand))
-      .map(e => e.seat);
-
+    const winnerHands = Hand.winners(eligibleEvals.map(e => e.hand));
+    const winnerSeats = eligibleEvals.filter(e => winnerHands.includes(e.hand)).map(e => e.seat);
     const share = Math.floor(pot.amount / winnerSeats.length);
     const rem   = pot.amount % winnerSeats.length;
-    winnerSeats.forEach((s, i) => {
-      winnings[s] += share + (i === 0 ? rem : 0);
-    });
+    winnerSeats.forEach((s, i) => { winnings[s] += share + (i === 0 ? rem : 0); });
   }
 
   const winnerInfo = [];
@@ -520,21 +572,21 @@ function doShowdown(room) {
     }
   });
 
+  updateStats(room, winnerInfo);
+
   room.showdownData = {
     winners: winnerInfo,
     hands: evals.map(e => ({
-      seat: e.seat,
-      name: e.name,
-      holeCards: e.holeCards,
-      handName: e.hand.name,
+      seat: e.seat, name: e.name, holeCards: e.holeCards,
+      handName: e.hand.name, handDescr: e.hand.descr || '',
     })),
   };
   room.pot = 0;
   broadcast(room);
-  scheduleNextHand(room);
+  scheduleNextHand(room, NEXT_HAND_DELAY_SHOWDOWN);
 }
 
-function scheduleNextHand(room) {
+function scheduleNextHand(room, delay = NEXT_HAND_DELAY_FOLD) {
   setTimeout(() => {
     if (!rooms[room.code]) return;
     room.showdownData = null;
@@ -542,7 +594,7 @@ function scheduleNextHand(room) {
     broadcast(room);
     const eligible = room.players.filter(p => p.chips > 0 && p.connected);
     if (eligible.length >= 2) startHand(room);
-  }, NEXT_HAND_DELAY);
+  }, delay);
 }
 
 // ─── Bot Logic ────────────────────────────────────────────────────────────────
@@ -594,7 +646,7 @@ function botDecide(room, seat) {
   const p = getP(room, seat);
   if (!p || !p.isBot) return;
 
-  const strength = handStrength(room, p) + (Math.random() * 10 - 5); // ±5 noise
+  const strength = handStrength(room, p) + (Math.random() * 10 - 5);
   const toCall   = room.currentBet - p.bet;
   const livePot  = room.pot + room.players.reduce((s,q) => s+q.bet, 0);
   const potOdds  = toCall > 0 ? toCall / (livePot + toCall) : 0;
@@ -606,18 +658,17 @@ function botDecide(room, seat) {
   let action, amount;
 
   if (bluff && canRaise) {
-    action = 'raise';
-    amount = Math.min(minRaise, maxBet);
+    action = 'raise'; amount = Math.min(minRaise, maxBet);
   } else if (strength >= 72 && canRaise) {
     const target = Math.min(maxBet, Math.max(minRaise, Math.floor(livePot * 0.75)));
     action = 'raise'; amount = target;
   } else if (strength >= 55) {
-    if (toCall <= 0)              action = 'check';
+    if (toCall <= 0)                 action = 'check';
     else if (strength/100 > potOdds) action = 'call';
-    else                          action = 'fold';
+    else                             action = 'fold';
   } else {
     if (toCall <= 0) action = 'check';
-    else if (potOdds < 0.18 && toCall <= BB_AMOUNT * 2) action = 'call';
+    else if (potOdds < 0.18 && toCall <= room.cfgBB * 2) action = 'call';
     else action = 'fold';
   }
 
@@ -629,7 +680,6 @@ function scheduleBotAct(room) {
   const p = getP(room, seat);
   if (!p || !p.isBot) return;
 
-  // Don't run bot loop when no humans are connected
   const hasHuman = room.players.some(q => !q.isBot && q.connected);
   if (!hasHuman) return;
 
@@ -649,19 +699,18 @@ io.on('connection', (socket) => {
 
   socket.on('join-room', ({ roomCode, playerName }) => {
     if (!roomCode || !playerName) return;
-    roomCode    = roomCode.toUpperCase().trim().slice(0, 8);
-    playerName  = playerName.trim().slice(0, 20);
+    roomCode   = roomCode.toUpperCase().trim().slice(0, 8);
+    playerName = playerName.trim().slice(0, 20);
     if (!playerName) return;
 
     if (!rooms[roomCode]) rooms[roomCode] = makeRoom(roomCode);
     const room = rooms[roomCode];
 
-    // Reconnect by name
     const existing = getByName(room, playerName);
     if (existing && !existing.connected) {
       const oldId = existing.socketId;
-      existing.socketId   = socket.id;
-      existing.connected  = true;
+      existing.socketId  = socket.id;
+      existing.connected = true;
       socketMap[socket.id] = { code: roomCode, seat: existing.seat };
       delete socketMap[oldId];
       socket.join(roomCode);
@@ -675,16 +724,40 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Find next available seat
     const used = new Set(room.players.map(p => p.seat));
     let seat = 0;
     while (used.has(seat)) seat++;
 
-    const player = makePlayer(socket.id, playerName, seat);
+    const player = makePlayer(socket.id, playerName, seat, room.cfgStartChips);
+    if (room.players.length === 0) room.hostSeat = seat;
     room.players.push(player);
+    ensureStats(room, seat);
     socketMap[socket.id] = { code: roomCode, seat };
     socket.join(roomCode);
     addLog(room, `${playerName} 입장`);
+    broadcast(room);
+  });
+
+  socket.on('configure-room', ({ sb, bb, startChips, rebuy, timer }) => {
+    const info = socketMap[socket.id];
+    if (!info) return;
+    const room = rooms[info.code];
+    if (!room || room.street !== 'waiting') return;
+    if (info.seat !== room.hostSeat) return;
+
+    const newSB    = parseInt(sb);
+    const newBB    = parseInt(bb);
+    const newStart = parseInt(startChips);
+    const newRebuy = parseInt(rebuy);
+    const newTimer = parseInt(timer);
+
+    if (!isNaN(newSB)    && newSB > 0)     room.cfgSB         = newSB;
+    if (!isNaN(newBB)    && newBB > 0)     room.cfgBB         = Math.max(newSB || room.cfgSB, newBB);
+    if (!isNaN(newStart) && newStart > 0)  room.cfgStartChips = newStart;
+    if (!isNaN(newRebuy) && newRebuy > 0)  room.cfgRebuy      = newRebuy;
+    if (!isNaN(newTimer))                  room.cfgTimer      = Math.min(120, Math.max(0, newTimer));
+
+    addLog(room, `설정: SB${room.cfgSB}/BB${room.cfgBB} 시작${room.cfgStartChips} 타이머${room.cfgTimer}초`);
     broadcast(room);
   });
 
@@ -716,13 +789,12 @@ io.on('connection', (socket) => {
     if (!room) return;
     const p = getP(room, info.seat);
     if (!p) return;
-    // Allow rebuy anytime between hands, or when bust
     if (p.chips > 0 && room.street !== 'waiting' && room.street !== 'showdown') {
       socket.emit('err', '핸드 사이 또는 칩이 없을 때만 리바이 가능합니다.');
       return;
     }
-    p.chips += REBUY_AMOUNT;
-    addLog(room, `${p.name} 리바이 (+${REBUY_AMOUNT})`);
+    p.chips += room.cfgRebuy;
+    addLog(room, `${p.name} 리바이 (+${room.cfgRebuy})`);
     broadcast(room);
   });
 
@@ -736,12 +808,13 @@ io.on('connection', (socket) => {
       return;
     }
     const usedNames = new Set(room.players.map(p => p.name));
-    const botName = BOT_NAMES.find(n => !usedNames.has(n)) || `Bot${room.players.length}`;
-    const used = new Set(room.players.map(p => p.seat));
+    const botName   = BOT_NAMES.find(n => !usedNames.has(n)) || `Bot${room.players.length}`;
+    const used      = new Set(room.players.map(p => p.seat));
     let seat = 0;
     while (used.has(seat)) seat++;
-    const bot = makePlayer(`bot-${seat}-${Date.now()}`, botName, seat);
+    const bot = makePlayer(`bot-${seat}-${Date.now()}`, botName, seat, room.cfgStartChips);
     bot.isBot = true;
+    ensureStats(room, seat);
     room.players.push(bot);
     addLog(room, `${botName} (봇) 입장`);
     broadcast(room);
@@ -752,13 +825,27 @@ io.on('connection', (socket) => {
     if (!info) return;
     const room = rooms[info.code];
     if (!room) return;
-    // Remove the last bot added (highest seat number among bots)
     const bots = room.players.filter(p => p.isBot).sort((a,b) => b.seat - a.seat);
     if (!bots.length) return;
     const bot = bots[0];
     room.players = room.players.filter(p => p.seat !== bot.seat);
     addLog(room, `${bot.name} (봇) 퇴장`);
     broadcast(room);
+  });
+
+  socket.on('delete-room', () => {
+    const info = socketMap[socket.id];
+    if (!info) return;
+    const room = rooms[info.code];
+    if (!room) return;
+    if (info.seat !== room.hostSeat) return;
+
+    // Notify all players in the room then clean up
+    io.to(info.code).emit('room-deleted');
+    for (const p of room.players) {
+      delete socketMap[p.socketId];
+    }
+    delete rooms[info.code];
   });
 
   socket.on('disconnect', () => {
@@ -770,7 +857,10 @@ io.on('connection', (socket) => {
       if (p) {
         p.connected = false;
         addLog(room, `${p.name} 연결 끊김`);
-        // Auto-fold if it's their turn mid-hand
+        if (info.seat === room.hostSeat) {
+          const newHost = room.players.find(q => !q.isBot && q.connected && q.seat !== info.seat);
+          if (newHost) room.hostSeat = newHost.seat;
+        }
         if (room.actionSeat === p.seat &&
             ['preflop','flop','turn','river'].includes(room.street)) {
           handleAction(room, p.seat, 'fold');

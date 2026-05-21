@@ -10,10 +10,14 @@
 
 <!-- ─── LOBBY ─── -->
 <div id="lobby">
-  <h1>Texas Hold'em</h1>
+  <div class="lobby-logo">
+    <div class="lobby-suits">♠ ♥ ♦ ♣</div>
+    <h1>Texas Hold'em</h1>
+    <p class="lobby-sub">친구들과 함께하는 홀덤</p>
+  </div>
   <div class="lobby-box">
-    <input id="inp-name" type="text" placeholder="이름 입력" maxlength="12" autocomplete="off">
-    <input id="inp-room" type="text" placeholder="방 코드 (없으면 자동 생성)" maxlength="8" autocomplete="off" style="text-transform:uppercase">
+    <input id="inp-name" type="text" placeholder="닉네임 입력" maxlength="12" autocomplete="off">
+    <input id="inp-room" type="text" placeholder="방 코드 (없으면 새 방 생성)" maxlength="8" autocomplete="off" style="text-transform:uppercase">
     <button id="btn-join">입장 / 방 만들기</button>
     <div id="lobby-err" class="err-msg"></div>
   </div>
@@ -22,32 +26,60 @@
 <!-- ─── GAME ─── -->
 <div id="game" style="display:none">
 
+  <!-- Topbar -->
   <div id="topbar">
     <span id="room-label">방: <strong id="room-code-disp"></strong></span>
     <span id="hand-label">Hand #<span id="hand-num">0</span></span>
     <span id="street-label">대기중</span>
+    <button id="btn-stats-toggle" class="topbar-btn">📊 통계</button>
   </div>
 
-  <!-- Community cards + Pot -->
-  <div id="board">
-    <div id="community-area">
-      <div id="community-cards"></div>
-      <div id="pot-display">팟: 0</div>
+  <!-- Host Settings Panel -->
+  <div id="settings-panel" style="display:none">
+    <div class="settings-title">⚙️ 방 설정 <span class="settings-hint">(방장만 변경 가능)</span></div>
+    <div class="settings-grid">
+      <label>SB<input id="cfg-sb" type="number" min="1" placeholder="100"></label>
+      <label>BB<input id="cfg-bb" type="number" min="1" placeholder="200"></label>
+      <label>시작 칩<input id="cfg-start" type="number" min="100" placeholder="20000"></label>
+      <label>리바이<input id="cfg-rebuy" type="number" min="100" placeholder="20000"></label>
+      <label>타이머(초)<input id="cfg-timer" type="number" min="0" max="120" placeholder="30"></label>
     </div>
+    <button id="btn-apply-cfg" class="btn-gold">설정 적용</button>
   </div>
 
-  <!-- Seats -->
-  <div id="seats-area"></div>
+  <!-- Oval Table -->
+  <div id="table-wrap">
+    <div id="table-felt">
+      <div id="community-area">
+        <div id="street-indicator"></div>
+        <div id="community-cards"></div>
+        <div id="pot-display">팟: 0</div>
+      </div>
+    </div>
+    <!-- Seats injected here by JS as position:absolute children of table-wrap -->
+  </div>
 
   <!-- Action Controls -->
   <div id="controls" style="display:none">
+    <div id="timer-wrap" style="display:none">
+      <div id="timer-bar-bg"><div id="timer-bar"></div></div>
+      <span id="timer-label">30s</span>
+    </div>
     <div id="action-label"></div>
     <div id="action-btns">
-      <button id="btn-fold"  class="btn-red">폴드</button>
+      <button id="btn-fold"       class="btn-red">폴드</button>
       <button id="btn-check-call" class="btn-blue">체크</button>
       <div id="raise-row">
-        <input id="raise-inp" type="number" step="100">
-        <button id="btn-raise" class="btn-green">레이즈</button>
+        <div class="raise-presets">
+          <button class="preset-btn" data-pct="33">1/3팟</button>
+          <button class="preset-btn" data-pct="50">1/2팟</button>
+          <button class="preset-btn" data-pct="75">3/4팟</button>
+          <button class="preset-btn" data-pct="100">팟</button>
+        </div>
+        <div class="raise-input-row">
+          <input id="raise-inp" type="number" step="100">
+          <button id="btn-raise" class="btn-green">레이즈</button>
+        </div>
       </div>
       <button id="btn-allin" class="btn-orange">올인</button>
     </div>
@@ -55,16 +87,28 @@
 
   <!-- Meta buttons -->
   <div id="meta-btns">
-    <button id="btn-start"      style="display:none">게임 시작</button>
-    <button id="btn-rebuy"      style="display:none">리바이 (+20,000)</button>
-    <button id="btn-add-bot"    style="display:none">봇 추가</button>
-    <button id="btn-remove-bot" style="display:none">봇 제거</button>
+    <button id="btn-start"       style="display:none" class="btn-purple">게임 시작</button>
+    <button id="btn-rebuy"       style="display:none" class="btn-teal">리바이</button>
+    <button id="btn-add-bot"     style="display:none" class="btn-indigo">봇 추가</button>
+    <button id="btn-remove-bot"  style="display:none" class="btn-dark">봇 제거</button>
+    <button id="btn-show-cfg"    style="display:none" class="btn-cfg">⚙️ 설정</button>
+    <button id="btn-delete-room" style="display:none" class="btn-danger">방 삭제</button>
   </div>
 
   <!-- Showdown overlay -->
   <div id="showdown-overlay" style="display:none">
     <div id="showdown-box"></div>
   </div>
+
+  <!-- Stats Drawer -->
+  <div id="stats-drawer">
+    <div class="drawer-header">
+      <span>📊 통계 &amp; 핸드 기록</span>
+      <button id="btn-stats-close">✕</button>
+    </div>
+    <div id="stats-content"></div>
+  </div>
+  <div id="stats-overlay" style="display:none"></div>
 
   <!-- Log -->
   <div id="log-area">
