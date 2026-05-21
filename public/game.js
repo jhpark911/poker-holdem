@@ -3,6 +3,24 @@
 const socket = io();
 let state    = null;
 let mySeat   = null;
+let prevActions = {};
+let prevHandNum = 0;
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+
+const _tc = document.createElement('div');
+_tc.id = 'toast-container';
+document.body.appendChild(_tc);
+
+function showToast(msg, type) {
+  const colors = { fold:'#555', check:'#2471a3', call:'#2471a3', raise:'#d35400', allin:'#c0392b' };
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.style.borderLeftColor = colors[type] || '#27ae60';
+  t.textContent = msg;
+  _tc.appendChild(t);
+  setTimeout(() => t.remove(), 2300);
+}
 
 // ─── Lobby ───────────────────────────────────────────────────────────────────
 
@@ -28,6 +46,21 @@ function showLobbyErr(msg) {
 // ─── Socket Events ────────────────────────────────────────────────────────────
 
 socket.on('state', (s) => {
+  // Detect action changes → show toasts
+  if (s.handNumber !== prevHandNum) { prevActions = {}; prevHandNum = s.handNumber; }
+  s.players.forEach(p => {
+    if (p.lastAction && p.lastAction !== (prevActions[p.seat] || '')) {
+      const la = p.lastAction;
+      const type = la.startsWith('폴드') ? 'fold'
+        : la.startsWith('체크') ? 'check'
+        : la.startsWith('콜')   ? 'call'
+        : la.startsWith('레이즈') ? 'raise'
+        : la.startsWith('올인') ? 'allin' : '';
+      showToast(`${p.name}: ${la}`, type);
+      prevActions[p.seat] = la;
+    }
+  });
+
   state = s;
   const me = s.players.find(p => p.isMe);
   if (me) mySeat = me.seat;
@@ -87,6 +120,18 @@ function renderSeats(s) {
     else if (p.allIn)   statusTag = '<span class="stag allin">ALL-IN</span>';
     else if (!p.connected) statusTag = '<span class="stag disc">OFFLINE</span>';
 
+    // Last action badge
+    let lastActionBadge = '';
+    if (p.lastAction) {
+      const la  = p.lastAction;
+      const cls = la.startsWith('폴드') ? 'la-fold'
+        : la.startsWith('체크') ? 'la-check'
+        : la.startsWith('콜')   ? 'la-call'
+        : la.startsWith('레이즈') ? 'la-raise'
+        : la.startsWith('올인') ? 'la-allin' : '';
+      lastActionBadge = `<span class="last-action ${cls}">${esc(la)}</span>`;
+    }
+
     // Cards
     let cardsHtml = '';
     if (p.holeCards && p.holeCards.length) {
@@ -96,9 +141,9 @@ function renderSeats(s) {
     }
 
     div.innerHTML = `
-      <div class="seat-top">${badges}${statusTag}</div>
+      <div class="seat-top">${badges}${statusTag}${lastActionBadge}</div>
       <div class="seat-name">${esc(p.name)}${p.isMe ? ' <em>(나)</em>' : ''}</div>
-      <div class="seat-chips">칩 ${fmt(p.chips)}</div>
+      <div class="seat-chips">${p.isMe ? '내 칩' : '칩'} ${fmt(p.chips)}</div>
       ${p.bet > 0 ? `<div class="seat-bet">배팅 ${fmt(p.bet)}</div>` : ''}
       <div class="seat-cards">${cardsHtml}</div>
     `;

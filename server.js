@@ -77,6 +77,7 @@ function makePlayer(socketId, name, seat) {
     allIn: false,
     actedThisStreet: false,
     connected: true,
+    lastAction: '',
   };
 }
 
@@ -174,6 +175,7 @@ function broadcast(room) {
         allIn: p.allIn,
         connected: p.connected,
         isMe: p.seat === player.seat,
+        lastAction: p.lastAction,
         holeCards:
           p.seat === player.seat
             ? p.holeCards
@@ -211,6 +213,7 @@ function startHand(room) {
     p.folded           = p.chips <= 0 || !p.connected;
     p.allIn            = false;
     p.actedThisStreet  = false;
+    p.lastAction       = '';
   });
 
   room.communityCards  = [];
@@ -284,12 +287,14 @@ function handleAction(room, seat, action, amount) {
     case 'fold':
       p.folded = true;
       p.actedThisStreet = true;
+      p.lastAction = '폴드';
       addLog(room, `${p.name} 폴드`);
       break;
 
     case 'check':
       if (toCall > 0) return;
       p.actedThisStreet = true;
+      p.lastAction = '체크';
       addLog(room, `${p.name} 체크`);
       break;
 
@@ -300,6 +305,7 @@ function handleAction(room, seat, action, amount) {
       p.totalBet += actual;
       if (p.chips === 0) p.allIn = true;
       p.actedThisStreet = true;
+      p.lastAction = `콜 ${actual}`;
       addLog(room, `${p.name} 콜 ${actual}`);
       break;
     }
@@ -323,6 +329,7 @@ function handleAction(room, seat, action, amount) {
       p.totalBet += cost;
       if (p.chips === 0) p.allIn = true;
       p.actedThisStreet = true;
+      p.lastAction = `레이즈 → ${finalAmt}`;
 
       // Reopen action for others
       room.players.forEach(q => {
@@ -340,6 +347,7 @@ function handleAction(room, seat, action, amount) {
       p.totalBet      += cost;
       p.allIn          = true;
       p.actedThisStreet = true;
+      p.lastAction = '올인';
 
       if (allInTotal > room.currentBet) {
         const raiseBy = allInTotal - room.currentBet;
@@ -395,6 +403,7 @@ function advanceStreet(room) {
   room.players.forEach(p => {
     p.bet             = 0;
     p.actedThisStreet = false;
+    p.lastAction      = '';
   });
   room.currentBet    = 0;
   room.lastRaiseSize = BB_AMOUNT;
